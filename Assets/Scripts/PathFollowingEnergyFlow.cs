@@ -190,10 +190,15 @@ public class PathFollowingEnergyFlow : MonoBehaviour
         for (int i = 0; i < particleCount; i++)
         {
             GameObject particle = particlePrefab != null 
-                ? Instantiate(particlePrefab, transform) 
+                ? Instantiate(particlePrefab) 
                 : GameObject.CreatePrimitive(PrimitiveType.Sphere);
             
+            // Set scale BEFORE parenting to avoid inheritance issues
             particle.transform.localScale = Vector3.one * particleSize;
+            
+            // Now parent it
+            particle.transform.SetParent(transform, true);  // worldPositionStays = true
+            
             particles[i] = particle.transform;
             targetProgress[i] = (float)i / particleCount;
             particleProgress[i] = 0f;
