@@ -2,6 +2,21 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>
+/// Manages highlight zones and owns all button UI logic.
+///
+/// SETUP:
+///  1. Drag HighlightZone.shader into 'Highlight Shader'.
+///  2. Drag your Voyager root into 'Model Root'.
+///  3. Drag each HighlightZone GameObject into 'Zones' in order.
+///  4. Drag the matching UI Buttons into 'Zone Buttons' in the same order.
+///     No Reset button needed — clicking the active button again exits.
+///
+/// BUTTON BEHAVIOUR:
+///  - Click a button  → activates that zone, button tints active colour.
+///  - Click it again  → deactivates, everything back to normal, button resets.
+///  - Click another   → switches zone, previous button resets, new one tints.
+/// </summary>
 public class ModelHighlightManager : MonoBehaviour
 {
     [Header("Shader Reference")]
@@ -12,12 +27,22 @@ public class ModelHighlightManager : MonoBehaviour
     [Tooltip("Root GameObject of the Voyager model.")]
     public GameObject modelRoot;
 
-    [Header("Zones (order matches buttons)")]
+    [Header("Zones (order must match Zone Buttons)")]
     public List<HighlightZone> zones = new List<HighlightZone>();
 
-    [Header("UI Buttons")]
+    [Header("UI Buttons (order must match Zones)")]
+    [Tooltip("One button per zone. Clicking active button again exits highlight mode.")]
     public List<Button> zoneButtons = new List<Button>();
-    public Button resetButton;
+
+    [Header("Button Colours")]
+    [Tooltip("Button colour when idle.")]
+    public Color buttonNormalColor  = Color.white;
+    [Tooltip("Button colour when its zone is active.")]
+    public Color buttonActiveColor  = new Color(0.3f, 0.85f, 1f, 1f);
+    [Tooltip("Button text colour when idle (optional — leave alpha 0 to skip).")]
+    public Color labelNormalColor   = Color.black;
+    [Tooltip("Button text colour when active (optional — leave alpha 0 to skip).")]
+    public Color labelActiveColor   = Color.white;
 
     [Header("Ghost Settings")]
     [Range(0f, 1f)]
@@ -27,9 +52,9 @@ public class ModelHighlightManager : MonoBehaviour
     private Renderer[]   _renderers;
     private Material[][] _originalMaterials;
     private Material[][] _highlightMaterials;
-    private int          _activeZone = -1;
+    private int          _activeZone = -1;   // -1 = none active
 
-    // Shader property IDs (our custom highlight shader uses _BaseMap / _BaseColor)
+    // Highlight shader property IDs
     private static readonly int ID_BoxCenter  = Shader.PropertyToID("_BoxCenter");
     private static readonly int ID_BoxExtents = Shader.PropertyToID("_BoxExtents");
     private static readonly int ID_BoxR0      = Shader.PropertyToID("_BoxR0");
@@ -40,14 +65,15 @@ public class ModelHighlightManager : MonoBehaviour
     private static readonly int ID_BaseMap    = Shader.PropertyToID("_BaseMap");
     private static readonly int ID_BaseColor  = Shader.PropertyToID("_BaseColor");
 
-    // UnityGLTF/PBRGraph source property names to READ from
+    // Source material property IDs (read from original mats)
     private static readonly int ID_GLTF_Tex   = Shader.PropertyToID("baseColorTexture");
     private static readonly int ID_GLTF_Color = Shader.PropertyToID("baseColorFactor");
-    // Fallbacks for standard URP and Built-in shaders
     private static readonly int ID_URP_Tex    = Shader.PropertyToID("_BaseMap");
     private static readonly int ID_URP_Color  = Shader.PropertyToID("_BaseColor");
     private static readonly int ID_BI_Tex     = Shader.PropertyToID("_MainTex");
     private static readonly int ID_BI_Color   = Shader.PropertyToID("_Color");
+
+    // ── Unity lifecycle ───────────────────────────────────────────────────
 
     private void Awake()
     {
@@ -67,6 +93,7 @@ public class ModelHighlightManager : MonoBehaviour
         CacheRenderers();
         BuildHighlightMaterials();
         SetupButtons();
+        RefreshButtonVisuals(-1); // all buttons start idle
     }
 
     private void OnDestroy()
@@ -76,6 +103,8 @@ public class ModelHighlightManager : MonoBehaviour
             foreach (var m in mats)
                 if (m != null) Destroy(m);
     }
+
+    // ── Initialisation ────────────────────────────────────────────────────
 
     private void CacheRenderers()
     {
@@ -97,30 +126,22 @@ public class ModelHighlightManager : MonoBehaviour
             for (int m = 0; m < origMats.Length; m++)
             {
                 var hl = new Material(highlightShader);
-                hl.name = $"{(origMats[m] != null ? origMats[m].name : "null")}_highlight";
 
                 if (origMats[m] != null)
                 {
-                    // ── Texture: try GLTF → URP → Built-in ──────────────
+                    // Texture: GLTF → URP → Built-in
                     Texture tex = null;
-                    if (origMats[m].HasProperty(ID_GLTF_Tex))
-                        tex = origMats[m].GetTexture(ID_GLTF_Tex);
-                    if (tex == null && origMats[m].HasProperty(ID_URP_Tex))
-                        tex = origMats[m].GetTexture(ID_URP_Tex);
-                    if (tex == null && origMats[m].HasProperty(ID_BI_Tex))
-                        tex = origMats[m].GetTexture(ID_BI_Tex);
-                    if (tex != null)
-                        hl.SetTexture(ID_BaseMap, tex);
+                    if (origMats[m].HasProperty(ID_GLTF_Tex))  tex = origMats[m].GetTexture(ID_GLTF_Tex);
+                    if (tex == null && origMats[m].HasProperty(ID_URP_Tex)) tex = origMats[m].GetTexture(ID_URP_Tex);
+                    if (tex == null && origMats[m].HasProperty(ID_BI_Tex))  tex = origMats[m].GetTexture(ID_BI_Tex);
+                    if (tex != null) hl.SetTexture(ID_BaseMap, tex);
 
-                    // ── Colour: try GLTF → URP → Built-in ───────────────
+                    // Colour: GLTF → URP → Built-in
                     Color col = Color.white;
-                    bool  hasCol = false;
-                    if (origMats[m].HasProperty(ID_GLTF_Color)) { col = origMats[m].GetColor(ID_GLTF_Color); hasCol = true; }
-                    else if (origMats[m].HasProperty(ID_URP_Color))  { col = origMats[m].GetColor(ID_URP_Color);  hasCol = true; }
-                    else if (origMats[m].HasProperty(ID_BI_Color))   { col = origMats[m].GetColor(ID_BI_Color);   hasCol = true; }
-                    if (hasCol) hl.SetColor(ID_BaseColor, col);
-
-                    Debug.Log($"[Highlight] {origMats[m].name} → tex={tex?.name ?? "none"} col={col}");
+                    if      (origMats[m].HasProperty(ID_GLTF_Color)) col = origMats[m].GetColor(ID_GLTF_Color);
+                    else if (origMats[m].HasProperty(ID_URP_Color))  col = origMats[m].GetColor(ID_URP_Color);
+                    else if (origMats[m].HasProperty(ID_BI_Color))   col = origMats[m].GetColor(ID_BI_Color);
+                    hl.SetColor(ID_BaseColor, col);
                 }
 
                 hl.SetFloat(ID_GhostAlpha, ghostAlpha);
@@ -129,7 +150,6 @@ public class ModelHighlightManager : MonoBehaviour
             }
 
             _highlightMaterials[i] = hlMats;
-            Debug.Log($"[Highlight] Renderer '{_renderers[i].name}': {origMats.Length} material(s) → {hlMats.Length} highlight material(s)");
         }
     }
 
@@ -139,11 +159,27 @@ public class ModelHighlightManager : MonoBehaviour
         {
             if (zoneButtons[z] == null) continue;
             int captured = z;
-            zoneButtons[z].onClick.AddListener(() => ActivateZone(captured));
+            zoneButtons[z].onClick.AddListener(() => OnZoneButtonClicked(captured));
         }
-        if (resetButton != null)
-            resetButton.onClick.AddListener(ResetToNormal);
     }
+
+    // ── Button click handler ──────────────────────────────────────────────
+
+    private void OnZoneButtonClicked(int index)
+    {
+        if (_activeZone == index)
+        {
+            // Clicking the already-active button → exit highlight mode
+            ResetToNormal();
+        }
+        else
+        {
+            // Switch to (or activate) this zone
+            ActivateZone(index);
+        }
+    }
+
+    // ── Zone logic ────────────────────────────────────────────────────────
 
     public void ActivateZone(int index)
     {
@@ -169,25 +205,50 @@ public class ModelHighlightManager : MonoBehaviour
         for (int i = 0; i < _renderers.Length; i++)
             _renderers[i].materials = _highlightMaterials[i];
 
-        HighlightActiveButton(index);
+        RefreshButtonVisuals(index);
     }
 
     public void ResetToNormal()
     {
         _activeZone = -1;
+
         for (int i = 0; i < _renderers.Length; i++)
             _renderers[i].materials = _originalMaterials[i];
-        HighlightActiveButton(-1);
+
+        RefreshButtonVisuals(-1);
     }
 
-    private void HighlightActiveButton(int activeIndex)
+    // ── Button visuals ────────────────────────────────────────────────────
+
+    private void RefreshButtonVisuals(int activeIndex)
     {
         for (int i = 0; i < zoneButtons.Count; i++)
         {
             if (zoneButtons[i] == null) continue;
+
+            bool isActive = (i == activeIndex);
+
+            // Background colour via ColorBlock
             var colors = zoneButtons[i].colors;
-            colors.normalColor = (i == activeIndex) ? new Color(0.3f, 0.8f, 1f) : Color.white;
+            colors.normalColor      = isActive ? buttonActiveColor  : buttonNormalColor;
+            colors.selectedColor    = isActive ? buttonActiveColor  : buttonNormalColor;
+            colors.highlightedColor = isActive
+                ? Color.Lerp(buttonActiveColor, Color.white, 0.15f)
+                : Color.Lerp(buttonNormalColor, Color.white, 0.15f);
             zoneButtons[i].colors = colors;
+
+            // Label colour (only if alpha > 0 meaning user wants to control it)
+            if (labelNormalColor.a > 0f || labelActiveColor.a > 0f)
+            {
+                var label = zoneButtons[i].GetComponentInChildren<Text>();
+                if (label != null)
+                    label.color = isActive ? labelActiveColor : labelNormalColor;
+
+                // Also handle TextMeshPro if present
+                var tmpLabel = zoneButtons[i].GetComponentInChildren<TMPro.TMP_Text>();
+                if (tmpLabel != null)
+                    tmpLabel.color = isActive ? labelActiveColor : labelNormalColor;
+            }
         }
     }
 }

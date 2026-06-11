@@ -813,7 +813,10 @@ MonoBehaviour:
   - {fileID: 1380736591}
   - {fileID: 767669074}
   - {fileID: 90650681}
-  resetButton: {fileID: 387858498}
+  buttonNormalColor: {r: 1, g: 1, b: 1, a: 1}
+  buttonActiveColor: {r: 0.3, g: 0.85, b: 1, a: 1}
+  labelNormalColor: {r: 0, g: 0, b: 0, a: 1}
+  labelActiveColor: {r: 1, g: 1, b: 1, a: 1}
   ghostAlpha: 0.15
 --- !u!4 &894076562
 Transform:
@@ -855,7 +858,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1005118493}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0.5892669, y: 0, z: 0, w: 0.8079385}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -865,7 +868,7 @@ Transform:
   - {fileID: 655374294}
   - {fileID: 789499991}
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -72.21, y: 0, z: 0}
 --- !u!114 &1005118495
 MonoBehaviour:
   m_ObjectHideFlags: 0

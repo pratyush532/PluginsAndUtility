@@ -1,9 +1,9 @@
 using UnityEngine;
 
 /// <summary>
-/// Place this on an empty GameObject to define a highlight zone.
-/// Move/rotate/scale the transform in the editor to frame the part of
-/// the model you want to stay fully visible when this zone is active.
+/// Place on an empty GameObject to define a highlight zone.
+/// Move/rotate/scale the transform in the editor to frame the part
+/// of the model you want to stay fully visible when this zone is active.
 /// The coloured wire box is editor-only; invisible at runtime.
 /// </summary>
 public class HighlightZone : MonoBehaviour
@@ -14,31 +14,25 @@ public class HighlightZone : MonoBehaviour
     [Tooltip("Wire colour of this zone's gizmo in the editor.")]
     public Color gizmoColor = Color.cyan;
 
-    // ── Gizmo ────────────────────────────────────────────────────────────
+    // ── Gizmo (editor only) ──────────────────────────────────────────────
     private void OnDrawGizmos()
     {
-        Gizmos.color = gizmoColor;
+        Gizmos.color  = gizmoColor;
         Gizmos.matrix = transform.localToWorldMatrix;
-        Gizmos.DrawWireCube(Vector3.zero, Vector3.one); // unit cube scaled by transform
+        Gizmos.DrawWireCube(Vector3.zero, Vector3.one);
     }
 
     private void OnDrawGizmosSelected()
     {
         Gizmos.color  = new Color(gizmoColor.r, gizmoColor.g, gizmoColor.b, 0.15f);
         Gizmos.matrix = transform.localToWorldMatrix;
-        Gizmos.DrawCube(Vector3.zero, Vector3.one);     // semi-filled when selected
+        Gizmos.DrawCube(Vector3.zero, Vector3.one);
     }
 
-    // ── Data the manager needs ────────────────────────────────────────────
-
-    /// World-space centre of the box.
+    // ── Data the manager reads ───────────────────────────────────────────
     public Vector3 WorldCenter  => transform.position;
-
-    /// Half-extents in the box's LOCAL space (i.e. scale * 0.5).
     public Vector3 LocalExtents => transform.lossyScale * 0.5f;
-
-    /// The three right/up/forward axes of the box in world space.
-    public Vector3 AxisX => transform.right;
-    public Vector3 AxisY => transform.up;
-    public Vector3 AxisZ => transform.forward;
+    public Vector3 AxisX        => transform.right;
+    public Vector3 AxisY        => transform.up;
+    public Vector3 AxisZ        => transform.forward;
 }
